@@ -29,8 +29,6 @@
     self.title = @"News";
 }
 
-
-
 #pragma mark - API
 
 - (void) getArticlesFromServer {
@@ -40,23 +38,15 @@
        
         [self.articlesArray addObjectsFromArray:articles];
         
-        NSMutableArray* newPaths = [NSMutableArray array];
-        for (int i = 0; i < [self.articlesArray count]; i++) {
-            [newPaths addObject:[NSIndexPath indexPathForRow:i inSection:0]];
-        }
-        
-        [self.tableView beginUpdates];
-        [self.tableView insertRowsAtIndexPaths:newPaths withRowAnimation:UITableViewRowAnimationTop];
-        [self.tableView endUpdates];
-        
-        [self.tableView reloadData];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.tableView reloadData];
+        });
         
     } onFailure:^(NSError *error, NSInteger statusCode) {
         
         NSLog(@"%@", [error localizedDescription]);
     }];
 }
-
 
 - (void)didReceiveMemoryWarning {
     [super didReceiveMemoryWarning];
@@ -79,23 +69,33 @@
     
     cell.titleLabel.text = article.title;
     
-    __weak PDArticleTableViewCell *weakCell = cell;
-    __weak PDArticle *weakArticle = article;
-    NSURLSessionDownloadTask *downloadPhotoTask =
-    [[NSURLSession sharedSession]
-     downloadTaskWithURL:article.imageURL
-     completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
-         
-         UIImage *image = [UIImage imageWithData:
-                           [NSData dataWithContentsOfURL:location]];
-         
-         weakCell.articleImageView.image = image;
-         weakArticle.articleImageView = image;
-         
-         [weakCell layoutSubviews];
-     }];
-    
-    [downloadPhotoTask resume];
+    if (article.articleImageView == nil) {
+        cell.articleImageView.image = nil;
+        
+        __weak PDArticleTableViewCell *weakCell = cell;
+        __weak PDArticle *weakArticle = article;
+        
+        NSURLSessionDownloadTask *downloadPhotoTask =
+        [[NSURLSession sharedSession]
+         downloadTaskWithURL:article.imageURL
+         completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+             
+             UIImage *image = [UIImage imageWithData:
+                               [NSData dataWithContentsOfURL:location]];
+
+             dispatch_async(dispatch_get_main_queue(), ^{
+                 
+                 weakCell.articleImageView.image = image;
+                 weakArticle.articleImageView = image;
+
+                 [tableView layoutSubviews];
+             });
+         }];
+        
+        [downloadPhotoTask resume];
+    } else {
+        cell.articleImageView.image = article.articleImageView;
+    }
 
     return cell;
 }
